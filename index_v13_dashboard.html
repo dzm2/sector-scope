@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sector Scope</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body { margin:0; font-family:'Inter',sans-serif; background:#121212; color:white;}
+.navbar {display:flex; justify-content:space-between; padding:12px 24px; background:#1a1a1a; border-bottom:2px solid #E10600;}
+.section {padding:20px 24px;}
+.card {background:#1e1e1e; padding:14px; border-radius:10px;}
+.grid {display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.table td {padding:6px;}
+.driver-cell {display:flex; align-items:center; gap:6px;}
+.color-bar {width:4px; height:14px; border-radius:2px;}
+.form-row {margin:3px 0; font-size:12px;}
+.form-box {display:inline-block; width:16px; height:16px; line-height:16px; text-align:center; border-radius:3px; margin-right:3px; font-size:10px; font-weight:600;}
+.g {background:#1f7a1f;}
+.y {background:#b59f00;}
+.o {background:#b36b00;}
+.r {background:#a00000;}
+.toggle {cursor:pointer; color:#ccc; margin-top:6px; font-size:12px;}
+h3 {margin:0 0 8px 0; font-size:15px;}
+.hero {padding:18px 24px; border-bottom:1px solid #333;}
+.big {font-size:22px; font-weight:600;}
+.small {font-size:13px; color:#aaa;}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+<div>SECTOR SCOPE</div>
+<div id="countdown">--</div>
+</header>
+
+<section class="hero">
+<div class="big" id="raceName">Loading...</div>
+<div class="small" id="raceTime"></div>
+</section>
+
+<section class="section grid">
+<div class="card">
+<h3>Driver Standings</h3>
+<table class="table" id="driverTable"><tbody></tbody></table>
+</div>
+
+<div class="card">
+<h3>Constructor Standings</h3>
+<table class="table" id="constructorTable"><tbody></tbody></table>
+</div>
+</section>
+
+<section class="section grid">
+<div class="card">
+<h3>Driver Form (Last 5 Races)</h3>
+<div id="formContainer"></div>
+<div id="toggle" class="toggle">View All ▼</div>
+</div>
+
+<div class="card">
+<h3>Last Race Results</h3>
+<table class="table" id="resultsTable"><tbody></tbody></table>
+</div>
+</section>
+
+<script>
+const teamColors = {
+"Red Bull": "#1E41FF",
+"Ferrari": "#DC0000",
+"Mercedes": "#00D2BE",
+"McLaren": "#FF8700",
+"Aston Martin": "#006F62",
+"Alpine": "#0090FF",
+"Williams": "#005AFF",
+"RB": "#2B4562",
+"Kick Sauber": "#52E252",
+"Haas": "#FFFFFF"
+};
+
+function getTeamColor(name){
+for (let key in teamColors){
+if(name.includes(key)) return teamColors[key];
+}
+return "#666";
+}
+
+function getClass(pos){
+pos = parseInt(pos);
+if(pos <= 3) return "g";
+if(pos <= 6) return "y";
+if(pos <= 10) return "o";
+return "r";
+}
+
+async function safeFetch(url){
+try{
+const res = await fetch(url);
+if(!res.ok) return null;
+return await res.json();
+}catch{
+return null;
+}
+}
+
+let fullFormData = [];
+let expanded = false;
+
+function renderForm(){
+const container = document.getElementById("formContainer");
+container.innerHTML = "";
+const data = expanded ? fullFormData : fullFormData.slice(0,10);
+
+data.forEach(d=>{
+const row = document.createElement("div");
+row.className = "form-row";
+row.innerHTML = "<b>" + d.name + "</b> ";
+
+d.results.forEach(p=>{
+const box = document.createElement("span");
+box.className = "form-box " + getClass(p);
+box.innerText = p;
+row.appendChild(box);
+});
+
+container.appendChild(row);
+});
+}
+
+async function loadFormAndResults(){
+const data = await safeFetch("https://api.jolpi.ca/ergast/f1/current/results.json?limit=100");
+if(!data) return;
+
+const races = data.MRData.RaceTable.Races;
+const lastRace = races[races.length - 1];
+const last5 = races.slice(-5);
+
+const map = {};
+last5.forEach(r=>{
+r.Results.forEach(res=>{
+const name = res.Driver.familyName;
+if(!map[name]) map[name] = [];
+map[name].push(res.position);
+});
+});
+
+fullFormData = Object.entries(map).map(([name, results])=>({name, results}));
+renderForm();
+
+const resultsTable = document.querySelector("#resultsTable tbody");
+resultsTable.innerHTML = "";
+
+lastRace.Results.slice(0,10).forEach(r=>{
+const tr = document.createElement("tr");
+const color = getTeamColor(r.Constructor.name);
+tr.innerHTML = `
+<td>${r.position}</td>
+<td class="driver-cell">
+<div class="color-bar" style="background:${color}"></div>
+${r.Driver.familyName}
+</td>
+<td>${r.points}</td>`;
+resultsTable.appendChild(tr);
+});
+}
+
+async function loadStandings(){
+const d = await safeFetch("https://api.jolpi.ca/ergast/f1/current/driverStandings.json");
+const c = await safeFetch("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json");
+
+const dBody = document.querySelector("#driverTable tbody");
+const cBody = document.querySelector("#constructorTable tbody");
+
+if(d){
+const drivers = d.MRData.StandingsTable.StandingsLists[0].DriverStandings;
+drivers.slice(0,10).forEach(x=>{
+const tr = document.createElement("tr");
+const color = getTeamColor(x.Constructors[0].name);
+tr.innerHTML = `
+<td>${x.position}</td>
+<td class="driver-cell">
+<div class="color-bar" style="background:${color}"></div>
+${x.Driver.familyName}
+</td>
+<td>${x.points}</td>`;
+dBody.appendChild(tr);
+});
+}
+
+if(c){
+const teams = c.MRData.StandingsTable.StandingsLists[0].ConstructorStandings;
+teams.forEach(x=>{
+const tr = document.createElement("tr");
+const color = getTeamColor(x.Constructor.name);
+tr.innerHTML = `
+<td>${x.position}</td>
+<td class="driver-cell">
+<div class="color-bar" style="background:${color}"></div>
+${x.Constructor.name}
+</td>
+<td>${x.points}</td>`;
+cBody.appendChild(tr);
+});
+}
+}
+
+async function loadRace(){
+const res = await safeFetch("https://api.openf1.org/v1/sessions?session_name=Race");
+if(!res) return;
+
+const now = new Date();
+const next = res.find(s => new Date(s.date_start) > now);
+
+if(!next){
+document.getElementById("raceName").innerText = "No upcoming race";
+return;
+}
+
+const date = new Date(next.date_start);
+document.getElementById("raceName").innerText = next.meeting_name || next.location;
+document.getElementById("raceTime").innerText = date.toUTCString();
+
+function update(){
+const diff = date - new Date();
+if(diff <= 0) return;
+const d = Math.floor(diff/86400000);
+const h = Math.floor(diff%86400000/3600000);
+const m = Math.floor(diff%3600000/60000);
+document.getElementById("countdown").innerText = `${d}d ${h}h ${m}m`;
+}
+setInterval(update,60000);
+update();
+}
+
+document.getElementById("toggle").onclick = () => {
+expanded = !expanded;
+document.getElementById("toggle").innerText = expanded ? "Show Less ▲" : "View All ▼";
+renderForm();
+};
+
+loadStandings();
+loadFormAndResults();
+loadRace();
+</script>
+
+</body>
+</html>
