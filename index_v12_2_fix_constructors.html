@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sector Scope</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body { margin:0; font-family:'Inter',sans-serif; background:#121212; color:white;}
+.navbar {display:flex; justify-content:space-between; padding:12px 24px; background:#1a1a1a; border-bottom:2px solid #E10600;}
+.section {padding:24px;}
+.card {background:#1e1e1e; padding:16px; border-radius:10px;}
+.grid {display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.table td {padding:8px;}
+.driver-cell {display:flex; align-items:center; gap:6px;}
+.color-bar {width:4px; height:16px; border-radius:2px;}
+.form-row {margin:4px 0; font-size:13px;}
+.form-box {display:inline-block; width:18px; height:18px; line-height:18px; text-align:center; border-radius:3px; margin-right:3px; font-size:11px; font-weight:600;}
+.g {background:#1f7a1f;}
+.y {background:#b59f00;}
+.o {background:#b36b00;}
+.r {background:#a00000;}
+.toggle {cursor:pointer; color:#ccc; margin-top:8px; font-size:13px;}
+h3 {margin:0 0 10px 0; font-size:16px;}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+<div>SECTOR SCOPE</div>
+<div>Current Season</div>
+</header>
+
+<section class="section grid">
+<div class="card">
+<h3>Driver Standings</h3>
+<table class="table" id="driverTable"><tbody></tbody></table>
+</div>
+
+<div class="card">
+<h3>Constructor Standings</h3>
+<table class="table" id="constructorTable"><tbody></tbody></table>
+</div>
+</section>
+
+<section class="section">
+<div class="card">
+<h3>Driver Form (Last 5 Races)</h3>
+<div id="formContainer"></div>
+<div id="toggle" class="toggle">View All ▼</div>
+</div>
+</section>
+
+<script>
+const teamColors = {
+"Red Bull": "#1E41FF",
+"Ferrari": "#DC0000",
+"Mercedes": "#00D2BE",
+"McLaren": "#FF8700",
+"Aston Martin": "#006F62",
+"Alpine": "#0090FF",
+"Williams": "#005AFF",
+"RB": "#2B4562",
+"Kick Sauber": "#52E252",
+"Haas": "#FFFFFF"
+};
+
+function getTeamColor(name){
+for (let key in teamColors){
+if(name.includes(key)) return teamColors[key];
+}
+return "#666";
+}
+
+function getClass(pos){
+pos = parseInt(pos);
+if(pos <= 3) return "g";
+if(pos <= 6) return "y";
+if(pos <= 10) return "o";
+return "r";
+}
+
+async function safeFetch(url){
+try{
+const res = await fetch(url);
+if(!res.ok) return null;
+return await res.json();
+}catch{
+return null;
+}
+}
+
+let fullFormData = [];
+let expanded = false;
+
+function renderForm(){
+const container = document.getElementById("formContainer");
+container.innerHTML = "";
+
+const data = expanded ? fullFormData : fullFormData.slice(0,10);
+
+data.forEach(d=>{
+const row = document.createElement("div");
+row.className = "form-row";
+
+row.innerHTML = "<b>" + d.name + "</b> ";
+
+d.results.forEach(p=>{
+const box = document.createElement("span");
+box.className = "form-box " + getClass(p);
+box.innerText = p;
+row.appendChild(box);
+});
+
+container.appendChild(row);
+});
+}
+
+async function loadForm(){
+const data = await safeFetch("https://api.jolpi.ca/ergast/f1/current/results.json?limit=100");
+if(!data) return;
+
+const races = data.MRData.RaceTable.Races.slice(-5);
+const map = {};
+
+races.forEach(r=>{
+r.Results.forEach(res=>{
+const name = res.Driver.familyName;
+if(!map[name]) map[name] = [];
+map[name].push(res.position);
+});
+});
+
+fullFormData = Object.entries(map).map(([name, results])=>({name, results}));
+renderForm();
+}
+
+async function loadStandings(){
+const d = await safeFetch("https://api.jolpi.ca/ergast/f1/current/driverStandings.json");
+const c = await safeFetch("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json");
+
+const dBody = document.querySelector("#driverTable tbody");
+const cBody = document.querySelector("#constructorTable tbody");
+
+if(d){
+const drivers = d.MRData.StandingsTable.StandingsLists[0].DriverStandings;
+drivers.slice(0,10).forEach(x=>{
+const tr = document.createElement("tr");
+const color = getTeamColor(x.Constructors[0].name);
+tr.innerHTML = `
+<td>${x.position}</td>
+<td class="driver-cell">
+<div class="color-bar" style="background:${color}"></div>
+${x.Driver.familyName}
+</td>
+<td>${x.points}</td>`;
+dBody.appendChild(tr);
+});
+}
+
+if(c){
+const teams = c.MRData.StandingsTable.StandingsLists[0].ConstructorStandings;
+teams.forEach(x=>{
+const tr = document.createElement("tr");
+const color = getTeamColor(x.Constructor.name);
+tr.innerHTML = `
+<td>${x.position}</td>
+<td class="driver-cell">
+<div class="color-bar" style="background:${color}"></div>
+${x.Constructor.name}
+</td>
+<td>${x.points}</td>`;
+cBody.appendChild(tr);
+});
+}
+}
+
+document.getElementById("toggle").onclick = () => {
+expanded = !expanded;
+document.getElementById("toggle").innerText = expanded ? "Show Less ▲" : "View All ▼";
+renderForm();
+};
+
+loadStandings();
+loadForm();
+</script>
+
+</body>
+</html>
