@@ -13,8 +13,9 @@
     .card { background:#1e1e1e; padding:20px; border-radius:12px;}
     .table { width:100%; border-collapse:collapse;}
     .table th, .table td { padding:10px; text-align:left;}
-    .table th { color:#aaa; font-weight:normal; border-bottom:1px solid #333;}
+    .table th { color:#aaa; border-bottom:1px solid #333;}
     .table tr { border-bottom:1px solid #333;}
+    .form-row { margin:8px 0;}
     footer { text-align:center; padding:20px; color:#888;}
   </style>
 </head>
@@ -56,6 +57,11 @@
   </div>
 </section>
 
+<section class="section">
+  <h2>Driver Form (Last 5 Races)</h2>
+  <div class="card" id="form"></div>
+</section>
+
 <footer>
   <p>Data provided by community F1 APIs</p>
 </footer>
@@ -87,8 +93,40 @@ async function loadConstructors() {
   });
 }
 
+async function loadForm() {
+  const container = document.getElementById("form");
+  container.innerHTML = "Loading...";
+  try {
+    const res = await fetch("https://api.jolpi.ca/f1/current/last/5/results.json");
+    const data = await res.json();
+    const races = data.MRData.RaceTable.Races;
+
+    const formMap = {};
+
+    races.forEach(race => {
+      race.Results.forEach(result => {
+        const name = result.Driver.familyName;
+        if (!formMap[name]) formMap[name] = [];
+        formMap[name].push(result.position);
+      });
+    });
+
+    container.innerHTML = "";
+    Object.entries(formMap).slice(0,10).forEach(([driver, results]) => {
+      const div = document.createElement("div");
+      div.className = "form-row";
+      div.innerText = driver + " → " + results.join(" ");
+      container.appendChild(div);
+    });
+
+  } catch {
+    container.innerText = "Form data unavailable";
+  }
+}
+
 loadDrivers();
 loadConstructors();
+loadForm();
 </script>
 
 </body>
