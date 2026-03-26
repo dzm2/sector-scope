@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sector Scope</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body { margin:0; font-family:'Inter',sans-serif; background:#121212; color:white; }
+
+.header { padding:24px; border-bottom:2px solid #E10600; }
+.logo { height:80px; }
+
+.content { padding:20px 24px; }
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+
+.card { background:#1e1e1e; padding:14px; border-radius:10px; }
+
+.row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; font-size:13px; }
+
+.driver-cell { display:flex; align-items:center; gap:6px; }
+.color-bar { width:4px; height:14px; border-radius:2px; }
+
+/* performance bars */
+.bar { height:6px; border-radius:3px; margin-top:4px; background:#333; }
+.fill { height:100%; border-radius:3px; }
+.green { background:#1f7a1f; }
+.red { background:#a00000; }
+
+/* form boxes */
+.form-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; }
+.form-name { display:flex; align-items:center; gap:6px; }
+.form-boxes { display:flex; gap:3px; }
+.form-box {
+  width:18px; height:18px; line-height:18px; text-align:center;
+  border-radius:3px; font-size:11px; font-weight:600;
+}
+.g { background:#1f7a1f; }
+.y { background:#b59f00; }
+.o { background:#b36b00; }
+.r { background:#a00000; }
+
+.small { font-size:12px; color:#aaa; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img class="logo" src="sector_scope_logo_transparent.png">
+</header>
+
+<div class="content">
+
+<div class="grid">
+  <div class="card">
+    <h3>Driver Standings</h3>
+    <div id="drivers"></div>
+  </div>
+
+  <div class="card">
+    <h3>Constructor Standings</h3>
+    <div id="constructors"></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3>Quali vs Race Performance</h3>
+    <div id="performance"></div>
+  </div>
+
+  <div class="card">
+    <h3>Driver Form</h3>
+    <div id="form"></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h3>Team Performance</h3>
+    <div id="teams"></div>
+  </div>
+
+  <div class="card">
+    <h3>Race Weekend Status</h3>
+    <div id="raceStatus">Loading...</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const teamColors = {
+"red bull":"#1E41FF","ferrari":"#DC0000","mercedes":"#00D2BE","mclaren":"#FF8700",
+"aston martin":"#006F62","alpine":"#0090FF","williams":"#005AFF",
+"rb":"#2B4562","sauber":"#52E252","haas":"#FFFFFF","cadillac":"#C0C0C0"
+};
+
+function getColor(name){
+  let n=name.toLowerCase();
+  for(let k in teamColors){
+    if(n.includes(k)) return teamColors[k];
+  }
+  return "#888";
+}
+
+function boxClass(pos){
+  pos = parseInt(pos);
+  if(pos<=3) return "g";
+  if(pos<=6) return "y";
+  if(pos<=10) return "o";
+  return "r";
+}
+
+async function load(){
+
+let d=await fetch("https://api.jolpi.ca/ergast/f1/current/driverStandings.json").then(r=>r.json());
+let c=await fetch("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json").then(r=>r.json());
+let r=await fetch("https://api.jolpi.ca/ergast/f1/current/results.json?limit=100").then(r=>r.json());
+
+let drivers=d.MRData.StandingsTable.StandingsLists[0].DriverStandings;
+let constructors=c.MRData.StandingsTable.StandingsLists[0].ConstructorStandings;
+let races=r.MRData.RaceTable.Races;
+let lastRace=races[races.length-1];
+
+// drivers
+let dEl=document.getElementById("drivers");
+drivers.slice(0,10).forEach(x=>{
+  dEl.innerHTML+=`
+  <div class="row">
+    <div class="driver-cell">
+      <div class="color-bar" style="background:${getColor(x.Constructors[0].name)}"></div>
+      ${x.Driver.familyName}
+    </div>
+    <span>${x.points}</span>
+  </div>`;
+});
+
+// constructors
+let cEl=document.getElementById("constructors");
+constructors.forEach(x=>{
+  cEl.innerHTML+=`
+  <div class="row">
+    <div class="driver-cell">
+      <div class="color-bar" style="background:${getColor(x.Constructor.name)}"></div>
+      ${x.Constructor.name}
+    </div>
+    <span>${x.points}</span>
+  </div>`;
+});
+
+// performance
+let pEl=document.getElementById("performance");
+lastRace.Results.forEach(x=>{
+  let gain = x.grid - x.position;
+  let width = Math.min(Math.abs(gain)*10,100);
+  let color = gain>=0 ? "green" : "red";
+
+  pEl.innerHTML+=`
+  <div>
+    <div class="row">
+      <div class="driver-cell">
+        <div class="color-bar" style="background:${getColor(x.Constructor.name)}"></div>
+        ${x.Driver.familyName}
+      </div>
+      <span>${gain>=0?'+':''}${gain}</span>
+    </div>
+    <div class="bar">
+      <div class="fill ${color}" style="width:${width}%"></div>
+    </div>
+  </div>`;
+});
+
+// form (restored boxes)
+let fEl=document.getElementById("form");
+let map={};
+
+races.slice(-5).forEach(rc=>{
+  rc.Results.forEach(res=>{
+    if(!map[res.Driver.familyName]) map[res.Driver.familyName]=[];
+    map[res.Driver.familyName].push(res.position);
+  });
+});
+
+Object.entries(map).slice(0,10).forEach(([name,arr])=>{
+  let boxes = arr.map(p=>`<span class="form-box ${boxClass(p)}">${p}</span>`).join("");
+  fEl.innerHTML+=`
+  <div class="form-row">
+    <div class="form-name">
+      ${name}
+    </div>
+    <div class="form-boxes">
+      ${boxes}
+    </div>
+  </div>`;
+});
+
+// teams
+let tEl=document.getElementById("teams");
+constructors.forEach(t=>{
+  tEl.innerHTML+=`
+  <div class="row">
+    <div class="driver-cell">
+      <div class="color-bar" style="background:${getColor(t.Constructor.name)}"></div>
+      ${t.Constructor.name}
+    </div>
+    <span>${t.points}</span>
+  </div>`;
+});
+
+// race status
+document.getElementById("raceStatus").innerHTML =
+lastRace.raceName + "<div class='small'>" + lastRace.date + "</div>";
+
+}
+
+load();
+</script>
+
+</body>
+</html>
