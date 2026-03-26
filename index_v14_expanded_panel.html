@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sector Scope</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+body { margin:0; font-family:'Inter',sans-serif; background:#121212; color:white;}
+.navbar {display:flex; justify-content:space-between; padding:12px 24px; background:#1a1a1a; border-bottom:2px solid #E10600;}
+.section {padding:20px 24px;}
+.card {background:#1e1e1e; padding:14px; border-radius:10px;}
+.grid {display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.table td {padding:6px; cursor:pointer;}
+.driver-cell {display:flex; align-items:center; gap:6px;}
+.color-bar {width:4px; height:14px; border-radius:2px;}
+.toggle {cursor:pointer; color:#ccc; margin-top:6px; font-size:12px;}
+.detail {background:#151515; padding:10px; margin-top:6px; border-radius:6px; font-size:12px;}
+.hero {padding:18px 24px; border-bottom:1px solid #333;}
+.big {font-size:20px; font-weight:600;}
+.small {font-size:12px; color:#aaa;}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+<div>SECTOR SCOPE</div>
+<div id="countdown">--</div>
+</header>
+
+<section class="hero">
+<div class="big" id="raceName">Loading...</div>
+<div class="small" id="raceTime"></div>
+</section>
+
+<section class="section grid">
+<div class="card">
+<h3>Driver Standings</h3>
+<table class="table" id="driverTable"><tbody></tbody></table>
+<div id="driverToggle" class="toggle">View All ▼</div>
+</div>
+
+<div class="card">
+<h3>Constructor Standings</h3>
+<table class="table" id="constructorTable"><tbody></tbody></table>
+</div>
+</section>
+
+<section class="section">
+<div class="card">
+<h3>Teammate Comparison</h3>
+<div id="teammates"></div>
+</div>
+</section>
+
+<section class="section grid">
+<div class="card">
+<h3>Driver Form</h3>
+<div id="formContainer"></div>
+<div id="formToggle" class="toggle">View All ▼</div>
+</div>
+
+<div class="card">
+<h3>Last Race Results</h3>
+<table class="table" id="resultsTable"><tbody></tbody></table>
+<div id="resultsToggle" class="toggle">View All ▼</div>
+</div>
+</section>
+
+<section class="section">
+<div class="card">
+<h3>News</h3>
+<ul>
+<li>Latest F1 headline</li>
+<li>Driver transfer rumors</li>
+<li>Team strategy insights</li>
+</ul>
+</div>
+</section>
+
+<script>
+// team colors (normalized)
+const teamColors = {
+"red bull":"#1E41FF","ferrari":"#DC0000","mercedes":"#00D2BE","mclaren":"#FF8700",
+"aston martin":"#006F62","alpine":"#0090FF","williams":"#005AFF",
+"rb":"#2B4562","sauber":"#52E252","haas":"#FFFFFF","cadillac":"#C0C0C0"
+};
+
+function normalize(name){
+return name.toLowerCase();
+}
+
+function getColor(name){
+const n = normalize(name);
+for(let key in teamColors){
+if(n.includes(key)) return teamColors[key];
+}
+return "#888";
+}
+
+async function safeFetch(url){
+try{
+const r = await fetch(url);
+if(!r.ok) return null;
+return await r.json();
+}catch{return null;}
+}
+
+let drivers=[], expanded=false, results=[], resultsExpanded=false;
+let form=[], formExpanded=false;
+let openDriver=null;
+
+function renderDrivers(){
+const tbody=document.querySelector("#driverTable tbody");
+tbody.innerHTML="";
+const list=expanded?drivers:drivers.slice(0,10);
+
+list.forEach(d=>{
+const tr=document.createElement("tr");
+tr.onclick=()=>toggleDetail(d.Driver.familyName);
+
+tr.innerHTML=`<td>${d.position}</td>
+<td class="driver-cell"><div class="color-bar" style="background:${getColor(d.Constructors[0].name)}"></div>${d.Driver.familyName}</td>
+<td>${d.points}</td>`;
+tbody.appendChild(tr);
+
+if(openDriver===d.Driver.familyName){
+const detail=document.createElement("tr");
+detail.innerHTML=`<td colspan="3">
+<div class="detail">
+Team: ${d.Constructors[0].name}<br>
+Points: ${d.points}
+</div></td>`;
+tbody.appendChild(detail);
+}
+});
+}
+
+function toggleDetail(name){
+openDriver = openDriver===name?null:name;
+renderDrivers();
+}
+
+function renderResults(){
+const tbody=document.querySelector("#resultsTable tbody");
+tbody.innerHTML="";
+const list=resultsExpanded?results:results.slice(0,10);
+
+list.forEach(r=>{
+const tr=document.createElement("tr");
+tr.innerHTML=`<td>${r.position}</td>
+<td class="driver-cell"><div class="color-bar" style="background:${getColor(r.Constructor.name)}"></div>${r.Driver.familyName}</td>
+<td>${r.points}</td>`;
+tbody.appendChild(tr);
+});
+}
+
+function renderForm(){
+const c=document.getElementById("formContainer");
+c.innerHTML="";
+const list=formExpanded?form:form.slice(0,10);
+
+list.forEach(d=>{
+const row=document.createElement("div");
+row.innerHTML="<b>"+d.name+"</b> "+d.results.join(" ");
+c.appendChild(row);
+});
+}
+
+function renderTeammates(){
+const container=document.getElementById("teammates");
+container.innerHTML="";
+
+const map={};
+drivers.forEach(d=>{
+const team=d.Constructors[0].name;
+if(!map[team]) map[team]=[];
+map[team].push(d);
+});
+
+Object.entries(map).forEach(([team,ds])=>{
+if(ds.length===2){
+const div=document.createElement("div");
+div.innerHTML=`${ds[0].Driver.familyName} (${ds[0].points}) vs ${ds[1].Driver.familyName} (${ds[1].points})`;
+container.appendChild(div);
+}
+});
+}
+
+async function load(){
+const d=await safeFetch("https://api.jolpi.ca/ergast/f1/current/driverStandings.json");
+const c=await safeFetch("https://api.jolpi.ca/ergast/f1/current/constructorStandings.json");
+const r=await safeFetch("https://api.jolpi.ca/ergast/f1/current/results.json?limit=100");
+
+if(d){
+drivers=d.MRData.StandingsTable.StandingsLists[0].DriverStandings;
+renderDrivers();
+renderTeammates();
+}
+
+if(c){
+const tbody=document.querySelector("#constructorTable tbody");
+c.MRData.StandingsTable.StandingsLists[0].ConstructorStandings.forEach(x=>{
+const tr=document.createElement("tr");
+tr.innerHTML=`<td>${x.position}</td>
+<td class="driver-cell"><div class="color-bar" style="background:${getColor(x.Constructor.name)}"></div>${x.Constructor.name}</td>
+<td>${x.points}</td>`;
+tbody.appendChild(tr);
+});
+}
+
+if(r){
+const races=r.MRData.RaceTable.Races;
+results=races[races.length-1].Results;
+
+const map={};
+races.slice(-5).forEach(rc=>{
+rc.Results.forEach(res=>{
+if(!map[res.Driver.familyName]) map[res.Driver.familyName]=[];
+map[res.Driver.familyName].push(res.position);
+});
+});
+form=Object.entries(map).map(([name,results])=>({name,results}));
+
+renderResults();
+renderForm();
+}
+}
+
+document.getElementById("driverToggle").onclick=()=>{
+expanded=!expanded;
+document.getElementById("driverToggle").innerText=expanded?"Show Less ▲":"View All ▼";
+renderDrivers();
+};
+
+document.getElementById("resultsToggle").onclick=()=>{
+resultsExpanded=!resultsExpanded;
+document.getElementById("resultsToggle").innerText=resultsExpanded?"Show Less ▲":"View All ▼";
+renderResults();
+};
+
+document.getElementById("formToggle").onclick=()=>{
+formExpanded=!formExpanded;
+document.getElementById("formToggle").innerText=formExpanded?"Show Less ▲":"View All ▼";
+renderForm();
+};
+
+load();
+</script>
+
+</body>
+</html>
