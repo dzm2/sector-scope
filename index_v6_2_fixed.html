@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sector Scope</title>
+<style>
+body { margin:0; font-family: Arial, sans-serif; background:#121212; color:white;}
+.navbar { display:flex; justify-content:space-between; align-items:center; padding:16px 32px; background:#1a1a1a; border-bottom:2px solid #E10600;}
+.logo { font-weight:bold; font-size:20px;}
+.section { padding:40px 32px;}
+.hero { padding:60px 32px; text-align:center; border-bottom:1px solid #333;}
+.big { font-size:32px; margin:10px 0;}
+.card { background:#1e1e1e; padding:20px; border-radius:12px;}
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+.table { width:100%; border-collapse:collapse;}
+.table th, .table td { padding:10px;}
+.table th { color:#aaa; border-bottom:1px solid #333;}
+.table tr { border-bottom:1px solid #333;}
+
+.form-box { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:6px; margin-right:5px; font-size:13px; font-weight:bold;}
+.g { background:#1f7a1f;}
+.y { background:#b59f00;}
+.o { background:#b36b00;}
+.r { background:#a00000;}
+
+footer { text-align:center; padding:20px; color:#888;}
+</style>
+</head>
+<body>
+
+<header class="navbar">
+<div class="logo">SECTOR SCOPE</div>
+<div id="countdown">Loading next race...</div>
+</header>
+
+<section class="hero">
+<div class="big" id="raceName">Loading...</div>
+<div id="raceTime"></div>
+</section>
+
+<section class="section grid">
+<div class="card">
+<h3>Driver Standings</h3>
+<table class="table" id="driverTable"><tbody></tbody></table>
+</div>
+
+<div class="card">
+<h3>Constructor Standings</h3>
+<table class="table" id="constructorTable"><tbody></tbody></table>
+</div>
+</section>
+
+<section class="section">
+<div class="card">
+<h3>Driver Form</h3>
+<div id="form"></div>
+</div>
+</section>
+
+<footer>Data provided by community F1 APIs</footer>
+
+<script>
+function getClass(p){
+p=parseInt(p);
+if(p<=3)return "g";
+if(p<=6)return "y";
+if(p<=10)return "o";
+return "r";
+}
+
+async function loadStandings(){
+let d=await fetch("https://api.jolpi.ca/f1/current/driverStandings.json").then(r=>r.json());
+let drivers=d.MRData.StandingsTable.StandingsLists[0].DriverStandings;
+let tbody=document.querySelector("#driverTable tbody");
+tbody.innerHTML="";
+drivers.slice(0,10).forEach(x=>{
+let tr=document.createElement("tr");
+tr.innerHTML=`<td>${x.position}</td><td>${x.Driver.familyName}</td><td>${x.points}</td>`;
+tbody.appendChild(tr);
+});
+
+let c=await fetch("https://api.jolpi.ca/f1/current/constructorStandings.json").then(r=>r.json());
+let teams=c.MRData.StandingsTable.StandingsLists[0].ConstructorStandings;
+let tbody2=document.querySelector("#constructorTable tbody");
+tbody2.innerHTML="";
+teams.slice(0,10).forEach(x=>{
+let tr=document.createElement("tr");
+tr.innerHTML=`<td>${x.position}</td><td>${x.Constructor.name}</td><td>${x.points}</td>`;
+tbody2.appendChild(tr);
+});
+}
+
+async function loadForm(){
+let container=document.getElementById("form");
+container.innerHTML="";
+try{
+let res=await fetch("https://api.jolpi.ca/f1/current/results.json?limit=100").then(r=>r.json());
+let races=res.MRData.RaceTable.Races.slice(-5);
+let map={};
+
+races.forEach(r=>{
+r.Results.forEach(x=>{
+let n=x.Driver.familyName;
+if(!map[n])map[n]=[];
+map[n].push(x.position);
+});
+});
+
+Object.entries(map).slice(0,10).forEach(([d,arr])=>{
+let row=document.createElement("div");
+row.innerHTML="<b>"+d+"</b> ";
+arr.forEach(p=>{
+let s=document.createElement("span");
+s.className="form-box "+getClass(p);
+s.innerText=p;
+row.appendChild(s);
+});
+container.appendChild(row);
+});
+}catch{
+container.innerText="Form unavailable";
+}
+}
+
+async function loadRace(){
+try{
+let res=await fetch("https://api.jolpi.ca/f1/current.json").then(r=>r.json());
+let races=res.MRData.RaceTable.Races;
+
+if(!races || races.length===0){
+document.getElementById("raceName").innerText="No race data";
+return;
+}
+
+let next=races.find(r=>{
+let dt=new Date(r.date+"T"+(r.time||"00:00:00Z"));
+return dt > new Date();
+});
+
+if(!next){
+document.getElementById("raceName").innerText="Season complete";
+return;
+}
+
+let date=new Date(next.date+"T"+(next.time||"00:00:00Z"));
+document.getElementById("raceName").innerText=next.raceName;
+document.getElementById("raceTime").innerText=date.toUTCString();
+
+function update(){
+let diff=date-new Date();
+if(diff<=0)return;
+let d=Math.floor(diff/86400000);
+let h=Math.floor(diff%86400000/3600000);
+let m=Math.floor(diff%3600000/60000);
+document.getElementById("countdown").innerText=`${d}d ${h}h ${m}m`;
+}
+setInterval(update,60000);
+update();
+
+}catch{
+document.getElementById("raceName").innerText="Race data unavailable";
+}
+}
+
+loadStandings();
+loadForm();
+loadRace();
+</script>
+
+</body>
+</html>
